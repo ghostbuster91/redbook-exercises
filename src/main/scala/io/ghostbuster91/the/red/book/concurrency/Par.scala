@@ -28,6 +28,9 @@ object Par {
   }
 
   def fork[A](a: => Par[A]): Par[A] = es => es.submit(() => a(es).get)
+
+  def delay[A](fa: => Par[A]):Par[A] = es => fa(es)
+
   def lazyUnit[A](a: => A): Par[A] = Par.fork(Par.unit(a))
   def asyncF[A, B](f: A => B): A => Par[B] = a => lazyUnit(f(a))
   def map[A,B](a: Par[A])(f: A=>B): Par[B] =map2(a,unit(()))((a,_)=>f(a))
