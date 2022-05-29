@@ -10,7 +10,7 @@ trait RNG {
 
 class SimpleRNG(seed: Long) extends RNG {
   override def nextInt: (Int, RNG) = {
-    val newSeed = (seed * 0x5DEECE66DL + 0xBL) & 0xFFFFFFFFFFFFL
+    val newSeed = (seed * 0x5deece66dL + 0xbL) & 0xffffffffffffL
     val nextRng = new SimpleRNG(newSeed)
     val n = (newSeed >> 16).toInt
     n -> nextRng
@@ -72,9 +72,11 @@ object StateExc {
 
   def ints(count: Int)(rng: RNG): (List[Int], RNG) = {
     @scala.annotation.tailrec
-    def go(acc: List[Int],
-           countInternal: Int,
-           rngInternal: RNG): (List[Int], RNG) = {
+    def go(
+        acc: List[Int],
+        countInternal: Int,
+        rngInternal: RNG
+    ): (List[Int], RNG) = {
       if (countInternal > 0) {
         val nextInt = rngInternal.nextInt
         go(Cons(nextInt._1, acc), countInternal - 1, nextInt._2)
@@ -141,6 +143,12 @@ object StateExc {
     }
   }
 
+  def choice(s: Int, e: Int): Rand[Int] = {
+    flatMap(int) { i =>
+      unit(Math.abs(i) % Math.abs(e - s) + s)
+    }
+  }
+
   def map_flat[A, B](s: Rand[A])(f: A => B): Rand[B] = State { rng =>
     flatMap(s) { sa =>
       unit(f(sa))
@@ -189,7 +197,7 @@ object StateExc {
     }
 
     def map2[S, A, B, C](ra: State[S, A], rb: State[S, B])(
-      f: (A, B) => C
+        f: (A, B) => C
     ): State[S, C] = State { rng =>
       val (a, rng2) = ra(rng)
       val (b, rng3) = rb(rng2)
@@ -224,11 +232,12 @@ object StateExc {
       case Turn =>
         for {
           s <- get
-          _ <- if (!s.locked) {
-            set(s.copy(locked = true, candies = s.candies - 1))
-          } else {
-            set(s)
-          }
+          _ <-
+            if (!s.locked) {
+              set(s.copy(locked = true, candies = s.candies - 1))
+            } else {
+              set(s)
+            }
         } yield ()
     }
   }

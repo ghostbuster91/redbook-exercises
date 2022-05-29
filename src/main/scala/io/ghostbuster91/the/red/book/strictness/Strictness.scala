@@ -60,21 +60,19 @@ sealed trait Stream[+A] {
   }
 
   def takeWhileFoldRight(p: A => Boolean): Stream[A] = {
-    foldRight(Stream.empty[A])(
-      (a, b) =>
-        if (p(a)) {
-          Stream.cons(a, b)
-        } else {
-          Stream.empty
+    foldRight(Stream.empty[A])((a, b) =>
+      if (p(a)) {
+        Stream.cons(a, b)
+      } else {
+        Stream.empty
       }
     )
   }
 
   def takeWhile_1(f: A => Boolean): Stream[A] =
-    foldRight(Stream.empty[A])(
-      (h, t) =>
-        if (f(h)) Stream.cons(h, t)
-        else Stream.empty
+    foldRight(Stream.empty[A])((h, t) =>
+      if (f(h)) Stream.cons(h, t)
+      else Stream.empty
     )
 
   def headOption(): Option[A] = {
@@ -86,11 +84,10 @@ sealed trait Stream[+A] {
   }
 
   def filter(p: A => Boolean): Stream[A] = {
-    foldRight(Stream.empty[A])(
-      (a, acc) =>
-        if (p(a)) {
-          Stream.cons(a, acc)
-        } else acc
+    foldRight(Stream.empty[A])((a, acc) =>
+      if (p(a)) {
+        Stream.cons(a, acc)
+      } else acc
     )
   }
 
@@ -229,7 +226,7 @@ object Stream {
     }
   }
 
-  def unfoldConstant[A](v: A): Stream[A] = {
+  def unfoldConstant[A](v: => A): Stream[A] = {
     unfold[A, Unit](())(s => Option.some(s -> v))
   }
 
@@ -238,8 +235,8 @@ object Stream {
   }
 
   def unfoldFib(): Stream[BigInt] = {
-    unfold[BigInt, (BigInt, BigInt)]((0, 1))(
-      s => Option.some((s._2 -> (s._1 + s._2)) -> s._1)
+    unfold[BigInt, (BigInt, BigInt)]((0, 1))(s =>
+      Option.some((s._2 -> (s._1 + s._2)) -> s._1)
     )
   }
 
@@ -260,8 +257,8 @@ object Stream {
         case (_, book.Some(_)) => true
         case _                 => false
       }
-      .forAll {
-        case (v1, v2) => v1 == v2
+      .forAll { case (v1, v2) =>
+        v1 == v2
       }
   }
 
@@ -271,20 +268,32 @@ object Stream {
     println(Stream("a", "a", "a", "b").takeWhile(_ == "a").toList)
     println(
       Stream
-        .cons("a", Stream.cons({
-          println("ok")
-          "a"
-        }, Stream.cons("b", { println("not ok"); Stream("b") })))
+        .cons(
+          "a",
+          Stream.cons(
+            {
+              println("ok")
+              "a"
+            },
+            Stream.cons("b", { println("not ok"); Stream("b") })
+          )
+        )
         .takeWhile(_ == "a")
         .toList
     )
     println("=========================")
     println(
       Stream
-        .cons("a", Stream.cons({
-          println("ok")
-          "a"
-        }, Stream.cons("b", { println("not ok"); Stream("b") })))
+        .cons(
+          "a",
+          Stream.cons(
+            {
+              println("ok")
+              "a"
+            },
+            Stream.cons("b", { println("not ok"); Stream("b") })
+          )
+        )
         .takeWhileFoldRight(_ == "a")
         .toList
     )
@@ -321,10 +330,9 @@ object Stream {
     println(Stream.fib().drop(11).take(1).toList)
     println(
       Stream
-        .unfold[String, Int](1)(
-          i =>
-            if (i < 10) Option.some(i + 1 -> s"A$i")
-            else Option.none
+        .unfold[String, Int](1)(i =>
+          if (i < 10) Option.some(i + 1 -> s"A$i")
+          else Option.none
         )
         .toList
     )
@@ -421,17 +429,22 @@ object Stream {
 
   private def c1 = {
     Stream
-      .cons(2, Stream.cons(5, {
-        try {
-          throw new RuntimeException("kasper")
-        } catch {
-          case e: Throwable =>
-            e.printStackTrace();
-            Thread.sleep(100)
-            println("not ok");
-            Stream(7)
-        }
-      }))
+      .cons(
+        2,
+        Stream.cons(
+          5, {
+            try {
+              throw new RuntimeException("kasper")
+            } catch {
+              case e: Throwable =>
+                e.printStackTrace();
+                Thread.sleep(100)
+                println("not ok");
+                Stream(7)
+            }
+          }
+        )
+      )
   }
 
 }

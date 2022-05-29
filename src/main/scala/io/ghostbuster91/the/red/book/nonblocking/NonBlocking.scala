@@ -64,37 +64,29 @@ object NonBlocking {
           case Left(Success(valueA)) =>
             br match {
               case Some(valueB) =>
-                println("getBA")
                 eval(es)(k(Try(f(valueA, valueB))))
               case None =>
-                println("getA")
                 ar = Some(valueA)
             }
           case Right(Success(valueB)) =>
             ar match {
               case Some(valueA) =>
-                println("getAB")
                 eval(es)(k(Try(f(valueA, valueB))))
               case None =>
-                println("getB")
                 br = Some(valueB)
             }
           case Left(Failure(exception)) =>
             br match {
               case Some(valueB) =>
-                println("getFBA")
                 eval(es)(k(Failure(exception)))
-              case None =>
-                println("getFA")
+              case None => ()
             }
 
           case Right(Failure(exception)) =>
             ar match {
               case Some(valueA) =>
-                println("getFAB")
                 eval(es)(k(Failure(exception)))
-              case None =>
-                println("getFB")
+              case None => ()
             }
         })
         a(es)(aV => combiner ! Left(aV))
@@ -118,6 +110,10 @@ object NonBlocking {
   def parMap[A, B](l: List[A])(f: A => B): Par[List[B]] = fork {
     val fbs = l.map(asyncF(f))
     sequence(fbs)
+  }
+
+  def map[A, B](a: Par[A])(f: A => B): Par[B] = {
+    map2(a, unit(()))((a, _) => f(a))
   }
 
   def main(args: Array[String]): Unit = {

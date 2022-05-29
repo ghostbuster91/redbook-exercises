@@ -1,11 +1,24 @@
 package io.ghostbuster91.the.red.book
 
-sealed trait List[+A] // `List` data type, parameterized on a type, `A`
-case object Nil extends List[Nothing] // A `List` data constructor representing the empty list
+sealed trait List[+A] { // `List` data type, parameterized on a type, `A` {
+  def max[N >: A](implicit ev: Numeric[N]): N
+}
+case object Nil // A `List` data constructor representing the empty list
+    extends List[
+      Nothing
+    ] {
+  override def max[N >: Nothing](implicit ev: Numeric[N]): N =
+    throw new RuntimeException("max on empty")
+}
+
 /* Another data constructor, representing nonempty lists. Note that `tail` is another `List[A]`,
 which may be `Nil` or another `Cons`.
  */
-case class Cons[+A](head: A, tail: List[A]) extends List[A]
+case class Cons[+A](head: A, tail: List[A]) extends List[A] {
+  def max[N >: A](implicit ev: Numeric[N]) = {
+    ListEx.foldLeft(tail, head)((b, a) => ev.max(a, b))
+  }
+}
 
 object List {
   def apply[A](as: A*): List[A] = // Variadic function syntax
@@ -13,6 +26,13 @@ object List {
     else Cons(as.head, apply(as.tail: _*))
 
   def empty[A]: List[A] = Nil
+
+  def fill[A](n: Int)(item: => A): List[A] = {
+    io.ghostbuster91.the.red.book.strictness.Stream
+      .unfoldConstant(item)
+      .take(n)
+      .toList
+  }
 }
 
 object ListEx {
@@ -163,6 +183,15 @@ object ListEx {
     case Nil                       => sub == Nil
     case _ if startsWith(sup, sub) => true
     case Cons(h, t)                => hasSubsequence(t, sub)
+  }
+
+  def toString[A](l: List[A]): String = {
+    l match {
+      case Nil => "[]"
+      case Cons(head, tail) =>
+        "[" + foldRight(tail, s"$head")((a, b) => b + s", $a") + "]"
+    }
+
   }
 
   def main(args: Array[String]): Unit = {
