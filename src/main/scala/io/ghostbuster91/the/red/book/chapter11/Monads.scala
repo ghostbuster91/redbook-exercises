@@ -1,6 +1,7 @@
 package io.ghostbuster91.the.red.book.chapter11
 
 import io.ghostbuster91.the.red.book.Option
+import io.ghostbuster91.the.red.book.chapter12.Applicative
 import io.ghostbuster91.the.red.book.chapter8.Gen
 import io.ghostbuster91.the.red.book.state.StateExc.{State, main}
 
@@ -10,14 +11,14 @@ object Monads {
     def map[A, B](fa: F[A])(f: A => B): F[B]
   }
 
-  trait Monad[F[_]] extends Functor[F] {
+  trait Monad[F[_]] extends Functor[F] with Applicative[F] {
     def unit[A](a: => A): F[A]
     def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B]
 
     override def map[A, B](fa: F[A])(f: A => B): F[B] = {
       flatMap(fa)(a => unit(f(a)))
     }
-    def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] = {
+    override def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] = {
       flatMap(fa)(a => map(fb)(b => f(a, b)))
     }
 
