@@ -4,7 +4,6 @@ import io.ghostbuster91.the.red.book.chapter11.Monads.Functor
 import io.ghostbuster91.the.red.book.chapter3.monoids.Monoid
 
 trait Applicative[F[_]] extends Functor[F] { outer =>
-  def apply[A, B](fab: F[A => B])(fa: F[A]): F[B]
   def unit[A](a: => A): F[A]
 
   def applyMap2[A, B](fab: F[A => B])(fa: F[A]): F[B] = {
@@ -20,10 +19,12 @@ trait Applicative[F[_]] extends Functor[F] { outer =>
   }
 
   def map2[A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] = {
-    val function: F[A => (A, B)] = map[B, A => (A, B)](b => a => (a, b))(fb)
-    val value = apply[A => (A, B), A => C](unit(f))(function)
-    apply(value)(fa)
+    val fun1: F[A => (A, B)] =
+      map[B, A => (A, B)]((b: B) => (a: A) => (a, b))(fb)
+    val fPair: F[(A, B)] = apply(fun1)(fa)
+    map[(A, B), C](f.tupled)(fPair)
   }
+
   def product[A, B](fa: F[A], fb: F[B]): F[(A, B)] = {
     map2(fa, fb)((a, b) => (a, b))
   }
@@ -44,7 +45,7 @@ trait Applicative[F[_]] extends Functor[F] { outer =>
     }
   }
 
-  def compose[G[_]](
+  def compse[G[_]](
       G: Applicative[G]
   ): Applicative[({ type f[x] = F[G[x]] })#f] = new Applicative[
     ({
@@ -54,7 +55,7 @@ trait Applicative[F[_]] extends Functor[F] { outer =>
     override def unit[A](a: => A): F[G[A]] = outer.unit(G.unit(a))
 
     override def map[A, B](fa: F[G[A]])(f: A => B): F[G[B]] = {
-      outer.map[G[A], G[B]](G.map[A, B](f))(fa)
+      outer.map[G[A], G[B]](G.map[A, B](f)(_))(fa)
     }
   }
 }

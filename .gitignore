@@ -12,3 +12,8 @@ project/boot/
 project/plugins/project/
 
 .idea*
+.metals
+.bloop
+
+**/project/metals.sbt
+.bsp
