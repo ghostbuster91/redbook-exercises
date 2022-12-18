@@ -7,7 +7,7 @@ trait Applicative[F[_]] extends Functor[F] { outer =>
   def unit[A](a: => A): F[A]
 
   def applyMap2[A, B](fab: F[A => B])(fa: F[A]): F[B] = {
-    map2(fa, fab)((a, f) => f(a))
+    map2(fa, fab) { (a, f) => f(a) }
   }
 
   def apply[A, B](fab: F[A => B])(fa: F[A]): F[B] = {
