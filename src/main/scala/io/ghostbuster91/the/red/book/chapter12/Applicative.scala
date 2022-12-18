@@ -23,6 +23,7 @@ trait Applicative[F[_]] extends Functor[F] { outer =>
       map[B, A => (A, B)]((b: B) => (a: A) => (a, b))(fb)
     val fPair: F[(A, B)] = apply(fun1)(fa)
     map[(A, B), C](f.tupled)(fPair)
+
   }
 
   def product[A, B](fa: F[A], fb: F[B]): F[(A, B)] = {
