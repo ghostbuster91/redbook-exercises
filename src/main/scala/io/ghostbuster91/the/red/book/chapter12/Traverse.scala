@@ -120,8 +120,29 @@ object Traverse {
   type Id[A] = A
 
   implicit val idInstance: Applicative[Id] = new Applicative[Id] {
+
+    def map2[A, B, C](fa: Id[A], fb: Id[B])(f: (A, B) => C): Id[C] = {
+      f(fa, fb)
+    }
+
     override def unit[A](a: => A): Id[A] = a
 
-    override def map[A, B](fa: Id[A])(f: A => B): Id[B] = f(fa)
+  }
+
+  val listTraverse = new Traverse[List] {
+    override def traverse[M[_], A, B](as: List[A])(f: A => M[B])(implicit
+        M: Applicative[M]
+    ): M[List[B]] =
+      as.foldRight(M.unit(List[B]()))((a, fbs) => M.map2(f(a), fbs)(_ :: _))
+  }
+
+  val optionTraverse = new Traverse[Option] {
+    override def traverse[M[_], A, B](
+        oa: Option[A]
+    )(f: A => M[B])(implicit M: Applicative[M]): M[Option[B]] =
+      oa match {
+        case Some(a) => M.map(f(a))(Some(_))
+        case None    => M.unit(None)
+      }
   }
 }
