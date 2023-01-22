@@ -30,7 +30,7 @@ object NonBlocking {
   def unit[A](a: A): Par[A] = { es =>
     new Future[Try[A]] {
       override private[nonblocking] def apply(k: Try[A] => Unit): Unit = {
-        k(Try(a))
+        k(Success(a))
       }
     }
   }
@@ -105,7 +105,21 @@ object NonBlocking {
 
   def lazyUnit[A](a: => A): Par[A] = fork(unit(a))
 
+  /** A non-strict version of `unit` */
+  def delay[A](a: => A): Par[A] =
+    es =>
+      new Future[Try[A]] {
+        def apply(cb: Try[A] => Unit): Unit =
+          cb(Try(a))
+      }
+
   def asyncF[A, B](f: A => B): A => Par[B] = a => lazyUnit(f(a))
+  def async[A](run: (A => Unit) => Unit): Par[A] = es =>
+    new Future[Try[A]] {
+      override private[nonblocking] def apply(k: Try[A] => Unit): Unit = {
+        run(a => k(Try(a)))
+      }
+    }
 
   def parMap[A, B](l: List[A])(f: A => B): Par[List[B]] = fork {
     val fbs = l.map(asyncF(f))
@@ -115,6 +129,19 @@ object NonBlocking {
   def map[A, B](a: Par[A])(f: A => B): Par[B] = {
     map2(a, unit(()))((a, _) => f(a))
   }
+
+  def flatMap[A, B](p: Par[A])(f: A => Par[B]): Par[B] =
+    es =>
+      new Future[Try[B]] {
+        def apply(cb: Try[B] => Unit): Unit =
+          p(es) {
+            case Failure(exception) =>
+              cb(Try {
+                throw exception
+              })
+            case Success(value) => f(value)(es)(cb)
+          }
+      }
 
   def main(args: Array[String]): Unit = {
 //    Thread.setDefaultUncaughtExceptionHandler((t, e) =>

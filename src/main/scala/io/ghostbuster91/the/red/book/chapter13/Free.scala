@@ -1,8 +1,10 @@
 package io.ghostbuster91.the.red.book.chapter13
 
 import io.ghostbuster91.the.red.book.chapter11.Monads
-import io.ghostbuster91.the.red.book.concurrency.Par.Par
+import io.ghostbuster91.the.red.book.nonblocking.NonBlocking.Par
 import scala.annotation.tailrec
+import io.ghostbuster91.the.red.book.nonblocking.NonBlocking
+import java.util.concurrent.ExecutorService
 
 sealed trait Free[F[_], A] {
   def map[B](f: A => B): Free[F, B] = {
@@ -22,6 +24,9 @@ trait Translate[F[_], G[_]] {
 }
 
 object Free {
+  type IO[A] = Free[Par, A]
+  def IO[A](a: => A): IO[A] = Suspend { NonBlocking.delay(a) }
+
   type ~>[F[_], G[_]] = Translate[F, G]
   def freeMonad[F[_]]: Monads.Monad[({ type f[x] = Free[F, x] })#f] =
     new Monads.Monad[({ type f[x] = Free[F, x] })#f] {
@@ -93,6 +98,9 @@ object Free {
     runFree(f)(t)(freeMonad[G])
   }
 
+  def unsafePerformIO[A](io: IO[A])(implicit E: ExecutorService): A =
+    NonBlocking.run(E) { run(io)(Console.parMonad) }
+
 }
 
 sealed trait Console[A] {
@@ -108,6 +116,13 @@ object Console {
     override def flatMap[A, B](fa: () => A)(f: A => (() => B)): () => B = () =>
       f(fa())()
     override def unit[A](a: => A): () => A = () => a
+  }
+
+  implicit val parMonad = new Monads.Monad[Par] {
+    def unit[A](a: => A) = NonBlocking.unit(a)
+    def flatMap[A, B](a: Par[A])(f: A => Par[B]) = NonBlocking.fork {
+      NonBlocking.flatMap(a)(f)
+    }
   }
 
   def runConsoleFunction0[A](a: Free[Console, A]): () => A = {
