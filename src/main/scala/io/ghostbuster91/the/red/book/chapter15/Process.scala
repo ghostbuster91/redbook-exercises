@@ -8,6 +8,8 @@ import io.ghostbuster91.the.red.book.nonblocking.NonBlocking
 import io.ghostbuster91.the.red.book.chapter13.Free
 import java.io.BufferedReader
 import java.io.FileReader
+import scala.util.Try
+import java.io.FileWriter
 
 sealed trait Process[F[_], O] {
   def onHalt(f: Throwable => Process[F, O]): Process[F, O] = this match {
@@ -93,6 +95,46 @@ sealed trait Process[F[_], O] {
     case Await(req, recv) => Await(req, recv andThen (_.drain))
 
   }
+
+  def tee[O2, O3](
+      p2: Process[F, O2]
+  )(t: Process.Tee[O, O2, O3]): Process[F, O3] = {
+    t match {
+      case Halt(e)    => this.kill onComplete p2.kill onComplete Halt(e)
+      case Emit(h, t) => Emit(h, (this tee p2)(t))
+      case Await(side, recv) =>
+        side.get match {
+          case Left(isO) =>
+            this match {
+              case Halt(e)    => p2.kill onComplete (Halt(e))
+              case Emit(h, t) => (t tee p2)(recv(Right(h)))
+              case Await(reqL, recvL) =>
+                Process.await(reqL)(recvL andThen (this2 => this2.tee(p2)(t)))
+            }
+          case Right(isO2) =>
+            p2 match {
+              case Halt(e)    => this.kill onComplete (Halt(e))
+              case Emit(h, t) => (this tee t)(recv(Right(h)))
+              case Await(reqR, recvR) =>
+                Process.await(reqR)(recvR andThen (p3 => this.tee(p3)(t)))
+            }
+        }
+    }
+  }
+
+  def to[O2](sink: Process.Sink[F, O]): Process[F, Unit] = {
+    Process.join { (this zipWith sink)((o, f) => f(o)) }
+  }
+
+  def through[O2](p2:Process[F,O=>Process[F,O2]]):Process[F,O2]={
+    Process.join { (this zipWith p2)((o, f) => f(o)) }
+  }
+
+  def zipWith[O2, O3](
+      p2: Process[F, O2]
+  )(f: (O, O2) => O3): Process[F, O3] = {
+    tee(p2)(Process.zipWith(f))
+  }
 }
 
 object Process {
@@ -112,7 +154,18 @@ object Process {
   }
   def Get[I] = Is[I]().Get
 
+  case class T[I, I2]() {
+    sealed trait f[X] { def get: Either[I => X, I2 => X] }
+    val L = new f[I] { def get = Left(identity) }
+    val R = new f[I2] { def get = Right(identity) }
+  }
+
+  def L[I, I2] = T[I, I2]().L
+  def R[I, I2] = T[I, I2]().R
+
   type Process1[I, O] = Process[Is[I]#f, O]
+  type Tee[I, I2, O] = Process[T[I, I2]#f, O]
+  type Sink[F[_], O] = Process[F, O => Process[F, Unit]]
 
   def Try[F[_], O](p: => Process[F, O]): Process[F, O] = {
     try (p)
@@ -223,6 +276,61 @@ object Process {
       }
       lines
     } { src => eval_(IO(src.close)) }
-
   }
+
+  def fileW(file: String, append: Boolean): Sink[IO, String] = {
+    resource[FileWriter, String => Process[IO, Unit]] {
+      IO { new FileWriter(file, append) }
+    } { w => constant { (s: String) => eval[IO, Unit](IO(w.write(s))) } } { w =>
+      eval_(IO(w.close))
+    }
+  }
+
+  def constant[A](a: A): Process[IO, A] = {
+    eval[IO, A](IO(a)).repeat
+  }
+
+  def haltT[I, I2, O]: Tee[I, I2, O] = {
+    Halt[T[I, I2]#f, O](End)
+  }
+
+  def awaitL[I, I2, O](
+      recv: I => Tee[I, I2, O],
+      fallback: => Tee[I, I2, O] = haltT[I, I2, O]
+  ): Tee[I, I2, O] = {
+    await[T[I, I2]#f, I, O](L) {
+      case Left(End)   => fallback
+      case Left(value) => Halt(value)
+      case Right(a)    => Try(recv(a))
+    }
+  }
+
+  def awaitR[I, I2, O](
+      recv: I2 => Tee[I, I2, O],
+      fallback: => Tee[I, I2, O] = haltT[I, I2, O]
+  ): Tee[I, I2, O] = {
+    await[T[I, I2]#f, I2, O](R) {
+      case Left(End)   => fallback
+      case Left(value) => Halt(value)
+      case Right(a)    => Try(recv(a))
+    }
+  }
+
+  def emitT[I, I2, O](
+      h: O,
+      tl: Tee[I, I2, O] = haltT[I, I2, O]
+  ): Tee[I, I2, O] = {
+    Emit(h, tl)
+  }
+
+  def zipWith[I, I2, O](f: (I, I2) => O): Tee[I, I2, O] = {
+    awaitL[I, I2, O](i => awaitR(i2 => emitT(f(i, i2)).repeat))
+  }
+
+  def zip[I, I2]: Tee[I, I2, (I, I2)] = zipWith((_, _))
+
+  def join[F[_],O](p:Process[F, Process[F,O]]):Process[F,O]={
+    p.flatMap(p2=> p2)
+  }
+
 }
